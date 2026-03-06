@@ -350,11 +350,16 @@
             padding: 0.5rem 0.75rem;
             border-bottom: 1px solid var(--border);
             font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.15s;
         }
+        .history-entry:hover { background: var(--bg-tertiary); }
         .history-entry:last-child { border-bottom: none; }
         .history-result { font-weight: 600; min-width: 5rem; }
         .history-agents { color: var(--text-secondary); flex: 1; }
-        .history-time { color: var(--text-muted); font-size: 0.75rem; }
+        .history-meta { color: var(--text-muted); font-size: 0.75rem; text-align: right; white-space: nowrap; }
+        .history-meta .history-ticks { display: block; }
+        .history-meta .history-ts { display: block; font-size: 0.7rem; }
 
         @media (max-width: 768px) {
             .match-grid {
@@ -454,6 +459,11 @@ python3 tournament/match_server.py --port 8080</code></pre>
         </div>
 
         <div class="replay-panel" id="replay-panel">
+            <div class="replay-players" id="replay-players" style="text-align:center; margin-bottom:0.5rem; font-size:0.95rem; display:none;">
+                <span id="replay-p1" style="color:#0C7BDC; font-weight:600;"></span>
+                <span style="color:var(--text-muted); margin:0 0.5rem;">vs</span>
+                <span id="replay-p2" style="color:#BF3682; font-weight:600;"></span>
+            </div>
             <div class="replay-header">
                 <h3>Game Replay</h3>
                 <div class="replay-controls">
@@ -934,7 +944,7 @@ python3 tournament/match_server.py --port 8080</code></pre>
 
             // Load trace for replay if available
             if (match.has_trace && match.id) {
-                loadTrace(match.id);
+                loadTrace(match.id, match.ai1_name, match.ai2_name);
             } else {
                 replayPanel.className = 'replay-panel';
             }
@@ -965,9 +975,19 @@ python3 tournament/match_server.py --port 8080</code></pre>
         // --- Match history ---
 
         function addToHistory(match) {
+            match._timestamp = new Date();
             matchHistory.unshift(match);
             if (matchHistory.length > 20) matchHistory.pop();
             renderHistory();
+        }
+
+        function formatTime(date) {
+            if (!date) return '';
+            var h = date.getHours();
+            var min = date.getMinutes();
+            var s = date.getSeconds();
+            var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+            return pad(h) + ':' + pad(min) + ':' + pad(s);
         }
 
         function renderHistory() {
@@ -985,13 +1005,27 @@ python3 tournament/match_server.py --port 8080</code></pre>
                 else if (m.winner === 1) { resultCls = 'result-loss'; resultText = 'P2 Win'; }
                 else if (m.status === 'timeout') { resultText = 'Timeout'; }
                 var ticks = m.final_tick != null ? m.final_tick + ' ticks' : '';
-                html += '<div class="history-entry">' +
+                var ts = m._timestamp ? formatTime(m._timestamp) : '';
+                html += '<div class="history-entry" data-history-idx="' + i + '">' +
                     '<span class="history-result ' + resultCls + '">' + resultText + '</span>' +
                     '<span class="history-agents">' + escapeHtml(m.ai1_name) + ' vs ' + escapeHtml(m.ai2_name) + '</span>' +
-                    '<span class="history-time">' + ticks + '</span>' +
+                    '<span class="history-meta"><span class="history-ticks">' + ticks + '</span><span class="history-ts">' + ts + '</span></span>' +
                     '</div>';
             }
             historyList.innerHTML = html;
+
+            // Attach click handlers
+            var entries = historyList.querySelectorAll('.history-entry');
+            for (var j = 0; j < entries.length; j++) {
+                entries[j].addEventListener('click', function () {
+                    var idx = parseInt(this.getAttribute('data-history-idx'));
+                    var m = matchHistory[idx];
+                    if (m && m.has_trace && m.id) {
+                        loadTrace(m.id, m.ai1_name, m.ai2_name);
+                        replayPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                });
+            }
         }
 
         // --- Replay Engine ---
@@ -1022,8 +1056,11 @@ python3 tournament/match_server.py --port 8080</code></pre>
             hpLost: '#f85149',
         };
 
-        function loadTrace(matchId) {
+        function loadTrace(matchId, p1Name, p2Name) {
             replayPanel.className = 'replay-panel';
+            var playersEl = document.getElementById('replay-players');
+            var p1El = document.getElementById('replay-p1');
+            var p2El = document.getElementById('replay-p2');
             fetch(getServerUrl() + '/api/trace/' + matchId)
                 .then(function (r) {
                     if (!r.ok) throw new Error('Trace not available');
@@ -1036,10 +1073,19 @@ python3 tournament/match_server.py --port 8080</code></pre>
                     if (replayTimer) clearInterval(replayTimer);
                     replayPanel.className = 'replay-panel visible';
                     document.getElementById('replay-play').textContent = 'Play';
+                    // Show player names
+                    if (p1Name && p2Name) {
+                        p1El.textContent = p1Name;
+                        p2El.textContent = p2Name;
+                        playersEl.style.display = '';
+                    } else {
+                        playersEl.style.display = 'none';
+                    }
                     drawFrame();
                 })
                 .catch(function () {
                     replayPanel.className = 'replay-panel';
+                    playersEl.style.display = 'none';
                 });
         }
 
