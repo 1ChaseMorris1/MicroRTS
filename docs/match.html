@@ -1324,8 +1324,19 @@ python3 tournament/match_server.py --port 8080</code></pre>
         // Default: LightRush (P1) vs RandomBiasedAI (P2) for a quick demo
         ai1Select.value = 'ai.abstraction.LightRush';
         ai2Select.value = 'ai.RandomBiasedAI';
+
+        // Check URL parameters for pre-filling (from leaderboard "Watch Replay" links)
+        var urlParams = new URLSearchParams(window.location.search);
+        var paramAi1 = urlParams.get('ai1');
+        var paramAi2 = urlParams.get('ai2');
+        var paramMap = urlParams.get('map');
+        if (paramAi1) ai1Select.value = paramAi1;
+        if (paramAi2) ai2Select.value = paramAi2;
+        if (paramMap) mapSelect.value = paramMap;
+
         updateDesc('ai1');
         updateDesc('ai2');
+        if (paramMap) loadMapPreview(paramMap);
         // Render any previously saved match history
         renderHistory();
         // Try to connect to server (will override with full agent/map list if available)
